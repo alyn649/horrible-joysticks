@@ -131,6 +131,30 @@ class MicrophonePowerStream:
                 break
         return latest
 
+    def wait_latest(
+        self,
+        timeout: Optional[float] = None,
+    ) -> Optional[Tuple[float, np.ndarray, np.ndarray]]:
+        """Wait for a spectrum, then return the newest queued result.
+
+        Args:
+            timeout: Seconds to wait for the first queued spectrum. None waits forever.
+        """
+        try:
+            if timeout is None:
+                latest = self._queue.get()
+            else:
+                latest = self._queue.get(timeout=timeout)
+        except Empty:
+            return None
+
+        while True:
+            try:
+                latest = self._queue.get_nowait()
+            except Empty:
+                break
+        return latest
+
     def __enter__(self) -> "MicrophonePowerStream":
         self.start()
         return self

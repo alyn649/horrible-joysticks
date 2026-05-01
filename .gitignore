@@ -1,0 +1,8 @@
+/ros_ws/build
+/ros_ws/install
+/ros_ws/log
+
+*.pyc
+/ros_ws/core
+/ros_ws/data
+/ros_ws/src/mocap_optitrack
