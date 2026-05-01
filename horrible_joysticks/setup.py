@@ -30,7 +30,7 @@ setup(
     entry_points={
         'console_scripts': [
             f"microphone_power_spectrum = {package_name}.nodes.microphone_power_spectrum:main",
-            f"microphone_spectrogram_gui = {package_name}.nodes.microphone_spectrogram_gui:main",
+            f"spectrogram_gui = {package_name}.nodes.spectrogram_gui:main",
         ],
     },
 )

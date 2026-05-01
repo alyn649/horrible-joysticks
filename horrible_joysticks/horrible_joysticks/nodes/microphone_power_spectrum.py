@@ -56,7 +56,7 @@ class MicrophonePowerSpectrumNode(Node):
         self._stream = MicrophonePowerStream(analyzer)
         self._stream.start()
 
-        self._publisher = self.create_publisher(PowerSpectogram, output_topic, 10)
+        self._publisher = self.create_publisher(PowerSpectogram, output_topic, 1)
 
         self.get_logger().info(
             "Publishing microphone power spectrum to '%s' from %.1f Hz to %.1f Hz "

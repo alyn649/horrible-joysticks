@@ -10,7 +10,7 @@
   <buildtool_depend>ament_python</buildtool_depend>
 
   <exec_depend>horrible_js_interfaces</exec_depend>
-  <exec_depend>python3-dearpygui</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-sounddevice</exec_depend>
   <exec_depend>rclpy</exec_depend>
