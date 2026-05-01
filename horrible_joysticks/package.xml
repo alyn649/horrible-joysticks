@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>horrible-joysticks</name>
+  <name>horrible_joysticks</name>
   <version>0.0.0</version>
   <description>The goal of this package is to create some joysticks available to use in ros, which no one will ever want to use.</description>
   <maintainer email="alyn649@aucklanduni.ac.nz">angus</maintainer>

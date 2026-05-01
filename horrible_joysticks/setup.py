@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 from glob import glob
 import os
 
-package_name = 'horrible-joysticks'
+package_name = 'horrible_joysticks'
 
 config_files = [p for p in glob(os.path.join("config", "**", "*"), recursive=True)
                 if os.path.isfile(p)]
