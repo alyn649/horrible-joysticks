@@ -1,0 +1,81 @@
+{
+  "instrument": "10-hole diatonic harmonica",
+  "key": "C",
+  "created_utc": "2026-04-30T08:54:04.500757+00:00",
+  "sample_rate": 44100,
+  "duration_s": 0.6,
+  "fft_size": 16384,
+  "harmonics": 4,
+  "holes": [
+    {
+      "hole": 1,
+      "blow_hz": 255.71,
+      "draw_hz": 288.01,
+      "blow_dbfs": -19.4,
+      "draw_dbfs": -20.9
+    },
+    {
+      "hole": 2,
+      "blow_hz": 328.38,
+      "draw_hz": 403.75,
+      "blow_dbfs": -18.8,
+      "draw_dbfs": -11.1
+    },
+    {
+      "hole": 3,
+      "blow_hz": 392.98,
+      "draw_hz": 508.72,
+      "blow_dbfs": -18.6,
+      "draw_dbfs": -11.1
+    },
+    {
+      "hole": 4,
+      "blow_hz": 519.49,
+      "draw_hz": 594.85,
+      "blow_dbfs": -10.4,
+      "draw_dbfs": -11.7
+    },
+    {
+      "hole": 5,
+      "blow_hz": 702.52,
+      "draw_hz": 737.51,
+      "blow_dbfs": -12.5,
+      "draw_dbfs": -10.0
+    },
+    {
+      "hole": 6,
+      "blow_hz": 823.65,
+      "draw_hz": 893.63,
+      "blow_dbfs": -11.2,
+      "draw_dbfs": -6.2
+    },
+    {
+      "hole": 7,
+      "blow_hz": 1108.96,
+      "draw_hz": 1044.36,
+      "blow_dbfs": -10.0,
+      "draw_dbfs": -11.0
+    },
+    {
+      "hole": 8,
+      "blow_hz": 1386.2,
+      "draw_hz": 1278.53,
+      "blow_dbfs": -13.1,
+      "draw_dbfs": -7.5
+    },
+    {
+      "hole": 9,
+      "blow_hz": 1639.22,
+      "draw_hz": 1388.89,
+      "blow_dbfs": -21.1,
+      "draw_dbfs": -11.4
+    },
+    {
+      "hole": 10,
+      "blow_hz": 1948.75,
+      "draw_hz": 1663.44,
+      "blow_dbfs": -1.3,
+      "draw_dbfs": -4.6
+    }
+  ]
+}
