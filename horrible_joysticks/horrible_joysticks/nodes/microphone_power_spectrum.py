@@ -76,12 +76,12 @@ class MicrophonePowerSpectrumNode(Node):
         if latest is None:
             return
 
-        _, _, power = latest
+        _, frequencies_hz, power = latest
         msg = PowerSpectogram()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "microphone"
-        msg.minfreq = float(self._min_freq)
-        msg.maxfreq = float(self._max_freq)
+        msg.minfreq = float(frequencies_hz[0])
+        msg.maxfreq = float(frequencies_hz[-1])
         msg.size = len(power)
         msg.powers = power.astype("float32").tolist()
 
