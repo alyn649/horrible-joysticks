@@ -31,7 +31,7 @@ setup(
         'console_scripts': [
             f"microphone_power_spectrum = {package_name}.nodes.microphone_power_spectrum:main",
             f"spectrogram_gui = {package_name}.nodes.spectrogram_gui:main",
-            f"harmonica_hole_analyzer = {package_name}.nodes.harmonica_hole_analyzer:main",
+            f"harmonica_joystick = {package_name}.nodes.harmonica_joystick:main",
         ],
     },
 )

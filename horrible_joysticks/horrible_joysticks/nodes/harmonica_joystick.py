@@ -16,6 +16,7 @@ from ament_index_python.packages import get_package_share_directory
 from horrible_js_interfaces.msg import PowerSpectogram
 from matplotlib.animation import FuncAnimation
 from rclpy.node import Node
+from sensor_msgs.msg import Joy
 
 
 HOLES_C = [
@@ -49,6 +50,8 @@ class HarmonicaAnalysis:
     spectrum_dbfs: np.ndarray
     blow_db: np.ndarray
     draw_db: np.ndarray
+    joystick_axes: np.ndarray
+    joystick_direction: str
 
 
 def package_config_path(filename: str) -> Path:
@@ -131,13 +134,21 @@ class HarmonicaHoleAnalyzerNode(Node):
         super().__init__("harmonica_hole_analyzer")
 
         self.declare_parameter("input_topic", "power_spectrum")
+        self.declare_parameter("output_topic", "joy")
+        self.declare_parameter("detected_output_topic", "detected_joy")
         self.declare_parameter("calibration_file", "harmonica-calibration.json")
         self.declare_parameter("max_harmonics", 4)
-        self.declare_parameter("detect_threshold_dbfs", -50.0)
+        self.declare_parameter("detect_threshold_dbfs", -40.0)
         self.declare_parameter("print_interval_s", 0.12)
         self.declare_parameter("enable_gui", True)
+        self.declare_parameter("joystick_zero_dbfs", -40.0)
+        self.declare_parameter("joystick_full_scale_dbfs", -10.0)
 
         self.input_topic = self.get_parameter("input_topic").get_parameter_value().string_value
+        self.output_topic = self.get_parameter("output_topic").get_parameter_value().string_value
+        self.detected_output_topic = (
+            self.get_parameter("detected_output_topic").get_parameter_value().string_value
+        )
         calibration_file = (
             self.get_parameter("calibration_file").get_parameter_value().string_value
         )
@@ -151,6 +162,12 @@ class HarmonicaHoleAnalyzerNode(Node):
             self.get_parameter("print_interval_s").get_parameter_value().double_value
         )
         self.enable_gui = self.get_parameter("enable_gui").get_parameter_value().bool_value
+        self.joystick_zero_dbfs = (
+            self.get_parameter("joystick_zero_dbfs").get_parameter_value().double_value
+        )
+        self.joystick_full_scale_dbfs = (
+            self.get_parameter("joystick_full_scale_dbfs").get_parameter_value().double_value
+        )
         if enable_gui_override is not None:
             self.enable_gui = enable_gui_override
 
@@ -158,6 +175,8 @@ class HarmonicaHoleAnalyzerNode(Node):
             raise ValueError("max_harmonics must be at least 1")
         if self.print_interval_s < 0.0:
             raise ValueError("print_interval_s must be >= 0")
+        if self.joystick_zero_dbfs >= self.joystick_full_scale_dbfs:
+            raise ValueError("joystick_zero_dbfs must be lower than joystick_full_scale_dbfs")
 
         self.calibration_path = resolve_calibration_path(calibration_file)
         hole_map = load_hole_map(self.calibration_path)
@@ -168,11 +187,19 @@ class HarmonicaHoleAnalyzerNode(Node):
         self.analysis_queue: Queue[HarmonicaAnalysis] = Queue(maxsize=1)
         self._last_print_time = 0.0
 
+        self.joy_publisher = self.create_publisher(Joy, self.output_topic, 1)
+        self.detected_joy_publisher = self.create_publisher(Joy, self.detected_output_topic, 1)
         self.create_subscription(PowerSpectogram, self.input_topic, self._on_spectrum, 1)
 
         self.get_logger().info(
-            "Analyzing harmonica holes from '%s' using calibration '%s'"
-            % (self.input_topic, self.calibration_path)
+            "Analyzing harmonica holes from '%s', publishing Joy to '%s' and detected Joy to "
+            "'%s' using calibration '%s'"
+            % (
+                self.input_topic,
+                self.output_topic,
+                self.detected_output_topic,
+                self.calibration_path,
+            )
         )
 
     def _on_spectrum(self, msg: PowerSpectogram) -> None:
@@ -213,18 +240,23 @@ class HarmonicaHoleAnalyzerNode(Node):
         blow_db = 20.0 * np.log10(np.maximum(blow_scores, 1e-12))
         draw_db = 20.0 * np.log10(np.maximum(draw_scores, 1e-12))
 
-        dominant_per_hole = np.maximum(blow_scores, draw_scores)
-        best_idx = int(np.argmax(dominant_per_hole))
+        blow_total = float(np.sum(blow_scores))
+        draw_total = float(np.sum(draw_scores))
+        is_blow = blow_total >= draw_total
+        joystick_direction = "blow" if is_blow else "draw"
+        direction_scores = blow_scores if is_blow else draw_scores
+        direction_db = blow_db if is_blow else draw_db
+        joystick_axes = self._scores_to_joystick_axes(direction_db, is_blow=is_blow)
+
+        best_idx = int(np.argmax(direction_scores))
         best_hole = int(self.holes[best_idx])
-        is_blow = bool(blow_scores[best_idx] >= draw_scores[best_idx])
-        direction = "blow" if is_blow else "draw"
         target_hz = float(self.blow_targets[best_idx] if is_blow else self.draw_targets[best_idx])
 
         freq_idx = int(np.argmin(np.abs(freqs - target_hz)))
         level_dbfs = float(spec_db[freq_idx])
         detection = HarmonicaDetection(
             hole=best_hole,
-            direction=direction,
+            direction=joystick_direction,
             strength=classify_strength(level_dbfs),
             target_hz=target_hz,
             level_dbfs=level_dbfs,
@@ -237,13 +269,46 @@ class HarmonicaHoleAnalyzerNode(Node):
             spectrum_dbfs=spec_db,
             blow_db=blow_db,
             draw_db=draw_db,
+            joystick_axes=joystick_axes,
+            joystick_direction=joystick_direction,
         )
+
+    def _scores_to_joystick_axes(self, scores_db: np.ndarray, is_blow: bool) -> np.ndarray:
+        span = self.joystick_full_scale_dbfs - self.joystick_zero_dbfs
+        normalized = (scores_db - self.joystick_zero_dbfs) / span
+        axes = np.clip(normalized, 0.0, 1.0).astype(np.float32)
+        if not is_blow:
+            axes *= -1.0
+        return axes
+
+    def _make_joy_message(self, axes: np.ndarray) -> Joy:
+        joy_msg = Joy()
+        joy_msg.header.stamp = self.get_clock().now().to_msg()
+        joy_msg.header.frame_id = "harmonica"
+        joy_msg.axes = axes.astype(np.float32).tolist()
+        joy_msg.buttons = []
+        return joy_msg
+
+    def _detected_joystick_axes(self, analysis: HarmonicaAnalysis) -> np.ndarray:
+        axes = np.zeros_like(analysis.joystick_axes, dtype=np.float32)
+        detection = analysis.detection
+        if detection.confident:
+            matches = np.flatnonzero(self.holes == detection.hole)
+            if matches.size > 0:
+                idx = int(matches[0])
+                axes[idx] = analysis.joystick_axes[idx]
+        return axes
 
     def output_analysis(self, analysis: HarmonicaAnalysis) -> None:
         """Final analysis output hook.
 
-        Add a ROS publisher call here when you have a message type for harmonica detections.
+        This is the final output point. Add any extra publishers here.
         """
+        self.joy_publisher.publish(self._make_joy_message(analysis.joystick_axes))
+        self.detected_joy_publisher.publish(
+            self._make_joy_message(self._detected_joystick_axes(analysis))
+        )
+
         detection = analysis.detection
         now_s = self.get_clock().now().nanoseconds * 1e-9
         if (now_s - self._last_print_time) < self.print_interval_s:
@@ -252,7 +317,8 @@ class HarmonicaHoleAnalyzerNode(Node):
         if detection.confident:
             status = (
                 f"Hole {detection.hole} | {detection.direction} | {detection.strength} "
-                f"({detection.level_dbfs:.1f} dBFS)"
+                f"({detection.level_dbfs:.1f} dBFS) | axes "
+                f"{np.array2string(analysis.joystick_axes, precision=2, suppress_small=True)}"
             )
         else:
             status = "No confident note detected"
@@ -273,21 +339,30 @@ class HarmonicaAnalyzerGui:
         )
 
         x = np.arange(len(node.holes))
-        width = 0.38
+        width = 0.25
         initial_db = np.full(len(node.holes), -120.0)
         self.bars_blow = self.ax_hist.bar(
-            x - width / 2,
+            x - width,
             initial_db,
             width=width,
             label="Blow",
             color="#2a9d8f",
         )
         self.bars_draw = self.ax_hist.bar(
-            x + width / 2,
+            x,
             initial_db,
             width=width,
             label="Draw",
             color="#e76f51",
+        )
+        self.ax_joy = self.ax_hist.twinx()
+        self.bars_joy = self.ax_joy.bar(
+            x + width,
+            np.zeros(len(node.holes)),
+            width=width,
+            label="Joy axis",
+            color="#457b9d",
+            alpha=0.75,
         )
 
         self.ax_hist.set_xticks(x)
@@ -295,8 +370,12 @@ class HarmonicaAnalyzerGui:
         self.ax_hist.set_ylabel("Estimated note energy (dB)")
         self.ax_hist.set_xlabel("Harmonica hole")
         self.ax_hist.set_ylim(-90, 0)
-        self.ax_hist.set_title("Harmonica Hole Histogram")
-        self.ax_hist.legend(loc="upper right")
+        self.ax_hist.set_title("Harmonica Hole Histogram and Joystick Axes")
+        self.ax_joy.set_ylabel("Joy axis")
+        self.ax_joy.set_ylim(-1.0, 1.0)
+        hist_handles, hist_labels = self.ax_hist.get_legend_handles_labels()
+        joy_handles, joy_labels = self.ax_joy.get_legend_handles_labels()
+        self.ax_hist.legend(hist_handles + joy_handles, hist_labels + joy_labels, loc="upper right")
         self.status_text = self.ax_hist.text(
             0.01,
             0.97,
@@ -325,7 +404,13 @@ class HarmonicaAnalyzerGui:
                 break
 
         if latest is None:
-            return (*self.bars_blow, *self.bars_draw, self.spec_line, self.status_text)
+            return (
+                *self.bars_blow,
+                *self.bars_draw,
+                *self.bars_joy,
+                self.spec_line,
+                self.status_text,
+            )
 
         self.spec_line.set_data(latest.frequencies_hz, latest.spectrum_dbfs)
         self.ax_spec.set_xlim(float(latest.frequencies_hz[0]), float(latest.frequencies_hz[-1]))
@@ -333,18 +418,25 @@ class HarmonicaAnalyzerGui:
         for i in range(len(self.node.holes)):
             self.bars_blow[i].set_height(float(latest.blow_db[i]))
             self.bars_draw[i].set_height(float(latest.draw_db[i]))
+            self.bars_joy[i].set_height(float(latest.joystick_axes[i]))
 
         detection = latest.detection
         if detection.confident:
             status = (
                 f"Hole {detection.hole} | {detection.direction} | {detection.strength} "
-                f"({detection.level_dbfs:.1f} dBFS)"
+                f"({detection.level_dbfs:.1f} dBFS) | joy {latest.joystick_direction}"
             )
         else:
             status = "No confident note detected"
         self.status_text.set_text(status)
 
-        return (*self.bars_blow, *self.bars_draw, self.spec_line, self.status_text)
+        return (
+            *self.bars_blow,
+            *self.bars_draw,
+            *self.bars_joy,
+            self.spec_line,
+            self.status_text,
+        )
 
 
 def main(args: Optional[list[str]] = None) -> None:
