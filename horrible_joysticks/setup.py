@@ -32,6 +32,7 @@ setup(
             f"microphone_power_spectrum = {package_name}.nodes.microphone_power_spectrum:main",
             f"spectrogram_gui = {package_name}.nodes.spectrogram_gui:main",
             f"harmonica_joystick = {package_name}.nodes.harmonica_joystick:main",
+            f"recorder_joystick = {package_name}.nodes.recorder_joystick:main",
         ],
     },
 )
